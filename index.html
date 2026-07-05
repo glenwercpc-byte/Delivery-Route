@@ -1228,16 +1228,20 @@ function renderActive(){
 
 function navigateToCurrentStop(){
   const n = state.order.length;
-  const isReturnStage = state.routeType === 'roundtrip' && state.currentIndex === n;
-  const dest = isReturnStage ? state.start : state.order[state.currentIndex];
-  let url = `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving`;
-  if (state.currentIndex === 0 && !isReturnStage){
-    // First leg: navigate from the shop's start address rather than live GPS,
-    // since the driver may not be physically there yet when testing/planning.
-    url += `&origin=${state.start.lat},${state.start.lng}`;
+  const i = state.currentIndex;
+  const isReturnStage = state.routeType === 'roundtrip' && i === n;
+
+  const dest = isReturnStage ? state.start : state.order[i];
+  let origin;
+  if (isReturnStage){
+    origin = state.order[n - 1];      // last delivery -> back to shop
+  } else if (i === 0){
+    origin = state.start;             // shop -> first delivery
+  } else {
+    origin = state.order[i - 1];      // previous delivery -> this delivery
   }
-  // Later legs (including the return leg) intentionally omit origin so
-  // Google Maps uses the driver's live location — they're already on the road.
+
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving`;
   window.open(url, '_blank');
 }
 
