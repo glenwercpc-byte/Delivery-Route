@@ -834,11 +834,8 @@ function makeAutocompleteEl(placeholder){
 async function initDefaultStart(){
   try{
     const res = await geocoder.geocode({ address: DEFAULT_START_ADDRESS, region: 'us' });
-    console.log('[BlossomRoute debug] geocode request:', DEFAULT_START_ADDRESS);
-    console.log('[BlossomRoute debug] geocode result:', res.results[0]);
     if (res.results[0]){
       const loc = res.results[0].geometry.location;
-      console.log('[BlossomRoute debug] resolved lat/lng:', loc.lat(), loc.lng());
       startFieldData = {
         address: res.results[0].formatted_address,
         lat: loc.lat(),
@@ -849,7 +846,6 @@ async function initDefaultStart(){
       enterStartEditMode();
     }
   }catch(e){
-    console.log('[BlossomRoute debug] geocode error:', e);
     enterStartEditMode();
   }
   validateSetup();
@@ -1017,8 +1013,6 @@ function useCurrentLocation(){
 function calculateRoute(){
   const validStops = [...stopFields.values()].filter(f => f.data).map(f => f.data);
   if (!startFieldData || validStops.length === 0) return;
-
-  console.log('[BlossomRoute debug] startFieldData at Optimize click:', JSON.stringify(startFieldData));
 
   const buildBtn = document.getElementById('btn-build-route');
   buildBtn.disabled = true;
