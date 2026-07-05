@@ -1215,7 +1215,14 @@ function renderActive(){
 
 function navigateToCurrentStop(){
   const stop = state.order[state.currentIndex];
-  const url = `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=driving`;
+  let url = `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=driving`;
+  if (state.currentIndex === 0){
+    // First leg: navigate from the shop's start address rather than live GPS,
+    // since the driver may not be physically there yet when testing/planning.
+    url += `&origin=${state.start.lat},${state.start.lng}`;
+  }
+  // Later legs intentionally omit origin so Google Maps uses the driver's
+  // live location — they're already out on the road by then.
   window.open(url, '_blank');
 }
 
