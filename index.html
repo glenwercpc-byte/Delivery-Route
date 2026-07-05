@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Blossom Route — Delivery Routing</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F3A2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Blossom Route">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#FBF8F3;
+    --ink:#22261F;
+    --ink-soft:#5B6154;
+    --forest:#1F3A2E;
+    --forest-dark:#142720;
+    --bloom:#E8546B;
+    --bloom-dark:#C93E56;
+    --sage:#CFE0CE;
+    --sage-line:#A9C2A6;
+    --amber:#D98C2B;
+    --card:#FFFFFF;
+    --border:#E4DFD3;
+    --shadow: 0 2px 14px rgba(31,58,46,0.10);
+    --shadow-lg: 0 10px 30px rgba(20,39,32,0.18);
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'JetBrains Mono', ui-monospace, monospace;
+    --r-lg:22px;
+    --r-md:14px;
+    --r-sm:9px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    -webkit-tap-highlight-color:transparent;
+    overscroll-behavior-y:none;
+  }
+  button{font-family:inherit;}
+  input{font-family:inherit;}
+
+  #app{
+    max-width:560px;
+    margin:0 auto;
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    padding-top:var(--safe-top);
+    padding-bottom:var(--safe-bottom);
+  }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:18px 20px 14px;
+  }
+  .topbar .mark{
+    width:34px;height:34px;border-radius:10px;
+    background:var(--forest);
+    display:flex;align-items:center;justify-content:center;
+    flex:none;
+  }
+  .topbar .mark svg{width:19px;height:19px;}
+  .topbar h1{
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:600;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  .topbar .sub{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:1px;
+  }
+
+  /* ---------- Screens ---------- */
+  main{flex:1; display:flex; flex-direction:column; min-height:0;}
+  .screen{display:none; flex:1; flex-direction:column; padding:0 20px 28px; min-height:0;}
+  .screen.active{display:flex;}
+
+  section.card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--r-lg);
+    padding:18px;
+    box-shadow:var(--shadow);
+    margin-bottom:16px;
+  }
+
+  h2.section-title{
+    font-family:var(--font-display);
+    font-size:15px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--forest);
+    margin:0 0 12px;
+  }
+
+  label.field-label{
+    display:block;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+
+  /* Address rows */
+  .addr-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .addr-slot{
+    flex:1;
+    min-width:0;
+    border:1.5px solid var(--border);
+    border-radius:var(--r-md);
+    background:#fff;
+    overflow:hidden;
+  }
+  gmp-place-autocomplete{
+    width:100%;
+    --gmp-mat-color-surface: #fff;
+    --gmp-mat-color-on-surface: var(--ink);
+  }
+  .addr-status{
+    flex:none;
+    width:26px;height:26px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;
+    background:var(--border);
+    color:transparent;
+    transition:background .2s, color .2s;
+  }
+  .addr-status.ok{background:var(--sage); color:var(--forest);}
+  .addr-remove{
+    flex:none;
+    width:30px;height:30px;
+    border:none;
+    background:transparent;
+    color:var(--ink-soft);
+    font-size:18px;
+    cursor:pointer;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .addr-remove:hover{background:#F2EEE3;}
+
+  .btn-ghost-add{
+    width:100%;
+    padding:12px;
+    border-radius:var(--r-md);
+    border:1.5px dashed var(--sage-line);
+    background:transparent;
+    color:var(--forest);
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .btn-ghost-add:hover{background:#F2F7F1;}
+
+  .locate-row{
+    margin-top:8px;
+  }
+  .btn-inline{
+    border:none;
+    background:none;
+    color:var(--forest);
+    font-weight:600;
+    font-size:13px;
+    padding:6px 0;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+
+  /* Route type selector */
+  .route-type{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .route-opt{
+    border:1.5px solid var(--border);
+    border-radius:var(--r-md);
+    padding:14px 12px;
+    cursor:pointer;
+    background:#fff;
+    transition:border-color .15s, background .15s;
+  }
+  .route-opt.selected{
+    border-color:var(--forest);
+    background:#F2F7F1;
+  }
+  .route-opt .ico{font-size:20px; margin-bottom:6px; display:block;}
+  .route-opt .name{font-weight:700; font-size:13.5px; display:block;}
+  .route-opt .desc{font-size:11.5px; color:var(--ink-soft); display:block; margin-top:2px; line-height:1.4;}
+
+  /* Buttons */
+  .btn-primary{
+    width:100%;
+    padding:16px;
+    border:none;
+    border-radius:16px;
+    background:var(--bloom);
+    color:#fff;
+    font-size:16px;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:0 8px 20px rgba(232,84,107,0.32);
+    transition:transform .1s, box-shadow .1s, opacity .15s;
+  }
+  .btn-primary:active{transform:scale(0.98);}
+  .btn-primary:disabled{
+    background:#D8D2C4;
+    color:#9C9788;
+    box-shadow:none;
+    cursor:not-allowed;
+  }
+  .btn-secondary{
+    width:100%;
+    padding:14px;
+    border:1.5px solid var(--forest);
+    border-radius:16px;
+    background:transparent;
+    color:var(--forest);
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .btn-secondary:active{transform:scale(0.98);}
+  .btn-text{
+    width:100%;
+    padding:10px;
+    border:none;
+    background:none;
+    color:var(--ink-soft);
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+
+  .error-banner{
+    background:#FBEAE9;
+    border:1px solid #EFC0BD;
+    color:#8C3A32;
+    border-radius:var(--r-md);
+    padding:12px 14px;
+    font-size:13px;
+    margin-bottom:14px;
+    line-height:1.5;
+  }
+
+  .spacer{flex:1;}
+  .bottom-actions{
+    position:sticky;
+    bottom:0;
+    padding-top:10px;
+    background:linear-gradient(to top, var(--bg) 60%, rgba(251,248,243,0));
+  }
+
+  /* ---------- Overview screen ---------- */
+  #map{
+    width:100%;
+    height:190px;
+    border-radius:var(--r-lg);
+    overflow:hidden;
+    border:1px solid var(--border);
+    margin-bottom:16px;
+    background:var(--sage);
+  }
+  .summary-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .summary-item{
+    text-align:center;
+  }
+  .summary-item .num{
+    font-family:var(--font-mono);
+    font-size:20px;
+    font-weight:600;
+    color:var(--forest);
+    display:block;
+  }
+  .summary-item .lbl{
+    font-size:10.5px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .summary-note{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    text-align:center;
+    margin-top:10px;
+    line-height:1.5;
+  }
+
+  /* ---------- Timeline (the "vine") ---------- */
+  .timeline{
+    list-style:none;
+    margin:0;
+    padding:0;
+  }
+  .timeline li{
+    display:flex;
+    gap:12px;
+    position:relative;
+  }
+  .timeline .rail{
+    flex:none;
+    width:22px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .timeline .stem{
+    width:2px;
+    flex:1;
+    background:var(--sage-line);
+  }
+  .timeline li:first-child .stem.top{background:transparent;}
+  .timeline li:last-child .stem.bottom{background:transparent;}
+  .bud{
+    width:16px;height:16px;
+    border-radius:50%;
+    border:2px solid var(--sage-line);
+    background:#fff;
+    flex:none;
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;
+    color:#fff;
+    margin:2px 0;
+  }
+  .timeline li.done .bud{
+    background:var(--forest);
+    border-color:var(--forest);
+  }
+  .timeline li.current .bud{
+    background:var(--bloom);
+    border-color:var(--bloom);
+    box-shadow:0 0 0 4px rgba(232,84,107,0.18);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 4px rgba(232,84,107,0.18);}
+    50%{box-shadow:0 0 0 8px rgba(232,84,107,0.10);}
+  }
+  .timeline .content{
+    flex:1;
+    padding-bottom:20px;
+    min-width:0;
+  }
+  .timeline .row-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:8px;
+  }
+  .timeline .addr{
+    font-weight:600;
+    font-size:14px;
+    line-height:1.35;
+  }
+  .timeline li.done .addr{color:var(--ink-soft); text-decoration:line-through; text-decoration-color:var(--sage-line);}
+  .timeline .eta{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-soft);
+    flex:none;
+  }
+  .timeline .leg-meta{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+
+  /* ---------- Active screen ---------- */
+  .progress-strip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-bottom:18px;
+  }
+  .progress-strip .seg{
+    flex:1;
+    height:5px;
+    border-radius:3px;
+    background:var(--border);
+  }
+  .progress-strip .seg.done{background:var(--forest);}
+  .progress-strip .seg.current{background:var(--bloom);}
+
+  .stage-card{
+    background:var(--forest);
+    color:#fff;
+    border-radius:var(--r-lg);
+    padding:22px 20px;
+    margin-bottom:16px;
+    box-shadow:var(--shadow-lg);
+  }
+  .stage-card .eyebrow{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--sage);
+    font-weight:700;
+    margin-bottom:8px;
+  }
+  .stage-card .address{
+    font-family:var(--font-display);
+    font-size:23px;
+    font-weight:600;
+    line-height:1.3;
+    margin-bottom:14px;
+  }
+  .stage-card .meta-row{
+    display:flex;
+    gap:18px;
+  }
+  .stage-card .meta-item .v{
+    font-family:var(--font-mono);
+    font-size:16px;
+    font-weight:600;
+  }
+  .stage-card .meta-item .k{
+    font-size:10.5px;
+    color:var(--sage);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+
+  .arrived-panel{
+    background:#F2F7F1;
+    border:1.5px solid var(--sage-line);
+    border-radius:var(--r-lg);
+    padding:18px;
+    margin-bottom:16px;
+    text-align:center;
+  }
+  .arrived-panel .check{
+    font-size:26px;
+    margin-bottom:6px;
+  }
+  .arrived-panel .msg{
+    font-family:var(--font-display);
+    font-size:17px;
+    font-weight:600;
+    color:var(--forest-dark);
+    margin-bottom:2px;
+  }
+  .arrived-panel .msg-sub{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-bottom:16px;
+  }
+  .confirm-row{
+    display:flex;
+    gap:10px;
+  }
+  .confirm-row button{flex:1;}
+
+  .upcoming-title{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--ink-soft);
+    margin:4px 0 10px;
+  }
+
+  /* ---------- Complete screen ---------- */
+  .complete-hero{
+    text-align:center;
+    padding:30px 10px 6px;
+  }
+  .complete-hero .emoji{font-size:44px;}
+  .complete-hero h2{
+    font-family:var(--font-display);
+    font-size:24px;
+    margin:10px 0 4px;
+  }
+  .complete-hero p{
+    color:var(--ink-soft);
+    font-size:14px;
+    margin:0;
+  }
+
+  /* Empty state */
+  .empty-hint{
+    font-size:13px;
+    color:var(--ink-soft);
+    text-align:center;
+    padding:18px 10px;
+    line-height:1.6;
+  }
+
+  /* Toast */
+  #toast{
+    position:fixed;
+    left:50%;
+    bottom:calc(24px + var(--safe-bottom));
+    transform:translateX(-50%) translateY(20px);
+    background:var(--forest-dark);
+    color:#fff;
+    padding:12px 18px;
+    border-radius:12px;
+    font-size:13.5px;
+    box-shadow:var(--shadow-lg);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s, transform .2s;
+    z-index:50;
+    max-width:calc(100% - 40px);
+    text-align:center;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  ::selection{background:var(--sage);}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="topbar">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1.8 1.8 1.8 4.6 0 6.4C10.2 6.6 10.2 3.8 12 2z" fill="#F9E7CF"/><circle cx="12" cy="12" r="2" fill="#FBF8F3"/><path d="M12 4.6c1.8 1.8 1.8 4.6 0 6.4-1.8-1.8-1.8-4.6 0-6.4z" fill="#E8546B"/><path d="M19.4 12c-1.8 1.8-4.6 1.8-6.4 0 1.8-1.8 4.6-1.8 6.4 0z" fill="#E8546B"/><path d="M12 19.4c-1.8-1.8-1.8-4.6 0-6.4 1.8 1.8 1.8 4.6 0 6.4z" fill="#E8546B"/><path d="M4.6 12c1.8-1.8 4.6-1.8 6.4 0-1.8 1.8-4.6 1.8-6.4 0z" fill="#E8546B"/></svg>
+    </div>
+    <div>
+      <h1>Blossom Route</h1>
+      <div class="sub" id="header-sub">Plan today's deliveries</div>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- ============ SETUP SCREEN ============ -->
+    <section class="screen active" id="screen-setup">
+
+      <div class="card">
+        <h2 class="section-title">Starting point</h2>
+        <label class="field-label" for="start-slot">Shop / start address</label>
+        <div class="addr-row">
+          <div class="addr-slot" id="start-slot"></div>
+          <div class="addr-status" id="start-status">✓</div>
+        </div>
+        <div class="locate-row">
+          <button class="btn-inline" id="btn-use-location" type="button">📍 Use my current location</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Delivery stops</h2>
+        <div id="stops-container"></div>
+        <button class="btn-ghost-add" id="btn-add-stop" type="button">+ Add delivery stop</button>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">When all deliveries are done</h2>
+        <div class="route-type">
+          <div class="route-opt selected" data-type="roundtrip">
+            <span class="ico">🔁</span>
+            <span class="name">Round trip</span>
+            <span class="desc">Return to the starting point after the last delivery</span>
+          </div>
+          <div class="route-opt" data-type="oneway">
+            <span class="ico">🏁</span>
+            <span class="name">One-way</span>
+            <span class="desc">Finish at the last delivery stop</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="setup-error"></div>
+
+      <div class="spacer"></div>
+      <div class="bottom-actions">
+        <button class="btn-primary" id="btn-build-route" disabled>Optimize route</button>
+      </div>
+    </section>
+
+    <!-- ============ OVERVIEW SCREEN ============ -->
+    <section class="screen" id="screen-overview">
+      <div id="map"></div>
+
+      <div class="card">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="num" id="ov-stops">0</span>
+            <span class="lbl">Stops</span>
+          </div>
+          <div class="summary-item">
+            <span class="num" id="ov-distance">–</span>
+            <span class="lbl">Distance</span>
+          </div>
+          <div class="summary-item">
+            <span class="num" id="ov-time">–</span>
+            <span class="lbl">Est. total</span>
+          </div>
+        </div>
+        <div class="summary-note" id="ov-note"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Optimized order</h2>
+        <ul class="timeline" id="ov-timeline"></ul>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="bottom-actions">
+        <button class="btn-primary" id="btn-start-deliveries">Start deliveries</button>
+        <button class="btn-text" id="btn-back-setup">Edit stops</button>
+      </div>
+    </section>
+
+    <!-- ============ ACTIVE DELIVERY SCREEN ============ -->
+    <section class="screen" id="screen-active">
+      <div class="progress-strip" id="progress-strip"></div>
+
+      <div class="stage-card">
+        <div class="eyebrow" id="stage-eyebrow">Stop 1 of 1</div>
+        <div class="address" id="stage-address">—</div>
+        <div class="meta-row">
+          <div class="meta-item">
+            <div class="v" id="stage-drivetime">–</div>
+            <div class="k">Drive time</div>
+          </div>
+          <div class="meta-item">
+            <div class="v" id="stage-remaining">–</div>
+            <div class="k">Remaining (est.)</div>
+          </div>
+          <div class="meta-item">
+            <div class="v" id="stage-eta">–</div>
+            <div class="k">Est. finish</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="arrived-panel-slot"></div>
+
+      <div class="card" id="nav-actions-card">
+        <button class="btn-secondary" id="btn-navigate" style="margin-bottom:10px;">🧭 Navigate to this stop</button>
+        <button class="btn-primary" id="btn-arrived">I've arrived</button>
+      </div>
+
+      <div class="upcoming-title">Remaining stops</div>
+      <ul class="timeline" id="active-timeline"></ul>
+    </section>
+
+    <!-- ============ COMPLETE SCREEN ============ -->
+    <section class="screen" id="screen-complete">
+      <div class="complete-hero">
+        <div class="emoji">🌸</div>
+        <h2>All deliveries complete</h2>
+        <p id="complete-sub">Nice work out there.</p>
+      </div>
+
+      <div class="card">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="num" id="cp-stops">0</span>
+            <span class="lbl">Delivered</span>
+          </div>
+          <div class="summary-item">
+            <span class="num" id="cp-actual">–</span>
+            <span class="lbl">Actual time</span>
+          </div>
+          <div class="summary-item">
+            <span class="num" id="cp-estimate">–</span>
+            <span class="lbl">Estimated</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Delivery log</h2>
+        <ul class="timeline" id="cp-timeline"></ul>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="bottom-actions">
+        <button class="btn-primary" id="btn-new-route">Start a new route</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   Blossom Route — delivery routing PWA
+   ------------------------------------------------------------
+   SETUP: paste your Google Maps API key below.
+   Required APIs on that key: Maps JavaScript API, Directions API,
+   Geocoding API, Places API (New).
+   ============================================================ */
+window.GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
+
+/* ---------------- App state ---------------- */
+const DOOR_SECONDS = 180; // average 3 minutes at each door
+
+const state = {
+  start: null,          // {address, lat, lng}
+  stops: [],            // [{id, address, lat, lng}]
+  routeType: 'roundtrip',
+  order: [],             // stops re-ordered for the optimized route
+  legs: [],              // legs[i] = drive leg INTO order[i]; legs[n] = return leg (roundtrip only)
+  currentIndex: 0,
+  tripStartedAt: null,
+  arrivals: [],          // [{stopIndexInOrder, at: timestamp}]
+  awaitingNextConfirm: false,
+};
+
+let map, directionsRenderer, directionsService, geocoder;
+let stopFieldSeq = 0;
+const stopFields = new Map(); // id -> {wrapperEl, statusEl, data:{address,lat,lng}}
+let startFieldData = null;
+
+/* ---------------- Utilities ---------------- */
+function formatDuration(totalSeconds){
+  const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s/3600);
+  const m = Math.round((s%3600)/60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m} min`;
+}
+function formatClock(date){
+  return date.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> t.classList.remove('show'), 3200);
+}
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function shortAddress(full){
+  if (!full) return '';
+  const parts = full.split(',');
+  return parts.slice(0, 2).join(',').trim();
+}
+
+/* ---------------- Google Maps bootstrap ---------------- */
+async function initApp(){
+  const libs = await google.maps.importLibrary('places');
+  await google.maps.importLibrary('geometry');
+  const { Map } = await google.maps.importLibrary('maps');
+
+  directionsService = new google.maps.DirectionsService();
+  geocoder = new google.maps.Geocoder();
+
+  // create the map lazily-styled once, reused for the overview screen
+  map = new Map(document.getElementById('map'), {
+    center: {lat: 41.8781, lng: -87.6298}, // Chicago fallback center
+    zoom: 11,
+    disableDefaultUI: true,
+    zoomControl: true,
+    mapId: 'BLOSSOM_ROUTE_MAP',
+  });
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    map,
+    suppressMarkers: false,
+    polylineOptions: { strokeColor: '#1F3A2E', strokeWeight: 5, strokeOpacity: 0.9 }
+  });
+
+  buildStartField();
+  addStopRow(); // start with one empty stop row
+  wireStaticEvents();
+}
+
+function makeAutocompleteEl(placeholder){
+  const el = document.createElement('gmp-place-autocomplete');
+  el.setAttribute('placeholder', placeholder);
+  return el;
+}
+
+function buildStartField(){
+  const slot = document.getElementById('start-slot');
+  const el = makeAutocompleteEl('Enter shop / starting address');
+  slot.appendChild(el);
+  el.addEventListener('gmp-select', async ({ placePrediction }) => {
+    try{
+      const place = placePrediction.toPlace();
+      await place.fetchFields({ fields: ['formattedAddress', 'location'] });
+      startFieldData = {
+        address: place.formattedAddress,
+        lat: place.location.lat(),
+        lng: place.location.lng(),
+      };
+      document.getElementById('start-status').classList.add('ok');
+      validateSetup();
+    }catch(err){
+      showToast("Couldn't read that address — please try selecting it again.");
+    }
+  });
+}
+
+function addStopRow(){
+  const id = ++stopFieldSeq;
+  const container = document.getElementById('stops-container');
+
+  const row = document.createElement('div');
+  row.className = 'addr-row';
+  row.dataset.id = id;
+
+  const slot = document.createElement('div');
+  slot.className = 'addr-slot';
+  const el = makeAutocompleteEl(`Delivery address #${stopFields.size + 1}`);
+  slot.appendChild(el);
+
+  const status = document.createElement('div');
+  status.className = 'addr-status';
+  status.textContent = '✓';
+
+  const remove = document.createElement('button');
+  remove.className = 'addr-remove';
+  remove.type = 'button';
+  remove.innerHTML = '&times;';
+  remove.addEventListener('click', () => {
+    row.remove();
+    stopFields.delete(id);
+    validateSetup();
+  });
+
+  row.appendChild(slot);
+  row.appendChild(status);
+  row.appendChild(remove);
+  container.appendChild(row);
+
+  const entry = { wrapperEl: row, statusEl: status, data: null };
+  stopFields.set(id, entry);
+
+  el.addEventListener('gmp-select', async ({ placePrediction }) => {
+    try{
+      const place = placePrediction.toPlace();
+      await place.fetchFields({ fields: ['formattedAddress', 'location'] });
+      entry.data = {
+        address: place.formattedAddress,
+        lat: place.location.lat(),
+        lng: place.location.lng(),
+      };
+      status.classList.add('ok');
+      validateSetup();
+    }catch(err){
+      showToast("Couldn't read that address — please try selecting it again.");
+    }
+  });
+}
+
+function validateSetup(){
+  const validStops = [...stopFields.values()].filter(f => f.data);
+  const ok = !!startFieldData && validStops.length >= 1;
+  document.getElementById('btn-build-route').disabled = !ok;
+  document.getElementById('setup-error').innerHTML = '';
+}
+
+function wireStaticEvents(){
+  document.getElementById('btn-add-stop').addEventListener('click', addStopRow);
+
+  document.getElementById('btn-use-location').addEventListener('click', useCurrentLocation);
+
+  document.querySelectorAll('.route-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.route-opt').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      state.routeType = opt.dataset.type;
+    });
+  });
+
+  document.getElementById('btn-build-route').addEventListener('click', calculateRoute);
+  document.getElementById('btn-back-setup').addEventListener('click', () => showScreen('screen-setup'));
+  document.getElementById('btn-start-deliveries').addEventListener('click', startDeliveries);
+  document.getElementById('btn-navigate').addEventListener('click', navigateToCurrentStop);
+  document.getElementById('btn-arrived').addEventListener('click', onArrived);
+  document.getElementById('btn-new-route').addEventListener('click', resetApp);
+}
+
+function useCurrentLocation(){
+  if (!navigator.geolocation){
+    showToast('Location is not available on this device.');
+    return;
+  }
+  const btn = document.getElementById('btn-use-location');
+  btn.textContent = '📍 Locating…';
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+    try{
+      const res = await geocoder.geocode({ location: { lat, lng } });
+      const address = res.results[0] ? res.results[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      startFieldData = { address, lat, lng };
+      const slot = document.getElementById('start-slot');
+      slot.innerHTML = '';
+      const readOnlyEl = document.createElement('div');
+      readOnlyEl.style.padding = '11px 12px';
+      readOnlyEl.style.fontSize = '14px';
+      readOnlyEl.textContent = shortAddress(address);
+      slot.appendChild(readOnlyEl);
+      document.getElementById('start-status').classList.add('ok');
+      validateSetup();
+    }catch(e){
+      showToast("Couldn't determine your address from GPS. Please type it in instead.");
+    } finally {
+      btn.textContent = '📍 Use my current location';
+    }
+  }, () => {
+    showToast('Location permission was denied.');
+    btn.textContent = '📍 Use my current location';
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+/* ---------------- Route calculation ---------------- */
+function calculateRoute(){
+  const validStops = [...stopFields.values()].filter(f => f.data).map(f => f.data);
+  if (!startFieldData || validStops.length === 0) return;
+
+  const buildBtn = document.getElementById('btn-build-route');
+  buildBtn.disabled = true;
+  buildBtn.textContent = 'Optimizing…';
+
+  const request = {
+    origin: { lat: startFieldData.lat, lng: startFieldData.lng },
+    destination: { lat: startFieldData.lat, lng: startFieldData.lng },
+    waypoints: validStops.map(s => ({ location: { lat: s.lat, lng: s.lng }, stopover: true })),
+    optimizeWaypoints: true,
+    travelMode: google.maps.TravelMode.DRIVING,
+    unitSystem: google.maps.UnitSystem.IMPERIAL,
+  };
+
+  directionsService.route(request, (result, status) => {
+    buildBtn.disabled = false;
+    buildBtn.textContent = 'Optimize route';
+
+    if (status !== 'OK'){
+      const el = document.getElementById('setup-error');
+      el.innerHTML = `<div class="error-banner">Couldn't calculate a route (${status}). Double-check that all addresses are valid and try again.</div>`;
+      return;
+    }
+
+    const route = result.routes[0];
+    const order = route.waypoint_order.map(i => validStops[i]);
+    const legs = route.legs.map(l => ({ duration: l.duration.value, distance: l.distance.value, distanceText: l.distance.text }));
+
+    state.start = startFieldData;
+    state.stops = validStops;
+    state.order = order;
+    state.legs = legs; // length = order.length + 1 (last leg returns to start)
+    state.currentIndex = 0;
+    state.arrivals = [];
+
+    directionsRenderer.setDirections(result);
+    renderOverview();
+    showScreen('screen-overview');
+  });
+}
+
+function computeTripSeconds(){
+  const n = state.order.length;
+  let running = 0;
+  const arrivalOffsets = [];
+  for (let i = 0; i < n; i++){
+    running += state.legs[i].duration;
+    arrivalOffsets.push(running);
+    running += DOOR_SECONDS;
+  }
+  let totalDistanceMeters = state.legs.slice(0, n).reduce((a,l)=>a+l.distance, 0);
+  if (state.routeType === 'roundtrip'){
+    running += state.legs[n].duration; // return leg
+    totalDistanceMeters += state.legs[n].distance;
+  }
+  return { totalSeconds: running, arrivalOffsets, totalDistanceMeters };
+}
+
+function renderOverview(){
+  const n = state.order.length;
+  const { totalSeconds, arrivalOffsets, totalDistanceMeters } = computeTripSeconds();
+  const now = new Date();
+
+  document.getElementById('ov-stops').textContent = n;
+  document.getElementById('ov-distance').textContent = (totalDistanceMeters / 1609.34).toFixed(1) + ' mi';
+  document.getElementById('ov-time').textContent = formatDuration(totalSeconds);
+
+  const finish = new Date(now.getTime() + totalSeconds * 1000);
+  const noteRoute = state.routeType === 'roundtrip'
+    ? `Includes the drive back to ${shortAddress(state.start.address)}.`
+    : `Route ends at the last delivery stop.`;
+  document.getElementById('ov-note').textContent =
+    `Estimated finish around ${formatClock(finish)} · ${noteRoute} (assumes ~3 min per doorstep)`;
+
+  const tl = document.getElementById('ov-timeline');
+  tl.innerHTML = '';
+  state.order.forEach((stop, i) => {
+    const arriveAt = new Date(now.getTime() + arrivalOffsets[i] * 1000);
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">${i+1}</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">${shortAddress(stop.address)}</span>
+          <span class="eta">${formatClock(arriveAt)}</span>
+        </div>
+        <div class="leg-meta">${formatDuration(state.legs[i].duration)} drive · ${state.legs[i].distanceText}</div>
+      </div>
+    `;
+    tl.appendChild(li);
+  });
+}
+
+/* ---------------- Active delivery flow ---------------- */
+function startDeliveries(){
+  state.tripStartedAt = Date.now();
+  state.currentIndex = 0;
+  state.arrivals = [];
+  state.awaitingNextConfirm = false;
+  renderActive();
+  showScreen('screen-active');
+}
+
+function renderActive(){
+  const n = state.order.length;
+  const i = state.currentIndex;
+  const stop = state.order[i];
+
+  // progress strip
+  const strip = document.getElementById('progress-strip');
+  strip.innerHTML = '';
+  for (let s = 0; s < n; s++){
+    const seg = document.createElement('div');
+    seg.className = 'seg' + (s < i ? ' done' : s === i ? ' current' : '');
+    strip.appendChild(seg);
+  }
+
+  document.getElementById('stage-eyebrow').textContent = `Stop ${i+1} of ${n}`;
+  document.getElementById('stage-address').textContent = shortAddress(stop.address);
+  document.getElementById('stage-drivetime').textContent = formatDuration(state.legs[i].duration);
+
+  // remaining time = remaining driving legs (+ return leg if roundtrip) + remaining door times
+  let remaining = 0;
+  for (let k = i; k < n; k++){
+    remaining += state.legs[k].duration + DOOR_SECONDS;
+  }
+  if (state.routeType === 'roundtrip') remaining += state.legs[n].duration;
+
+  document.getElementById('stage-remaining').textContent = formatDuration(remaining);
+  document.getElementById('stage-eta').textContent = formatClock(new Date(Date.now() + remaining*1000));
+
+  document.getElementById('arrived-panel-slot').innerHTML = '';
+  document.getElementById('nav-actions-card').style.display = 'block';
+
+  // upcoming timeline (remaining stops, current highlighted)
+  const tl = document.getElementById('active-timeline');
+  tl.innerHTML = '';
+  for (let k = i; k < n; k++){
+    const s = state.order[k];
+    const li = document.createElement('li');
+    li.className = k === i ? 'current' : '';
+    li.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">${k+1}</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">${shortAddress(s.address)}</span>
+        </div>
+        <div class="leg-meta">${formatDuration(state.legs[k].duration)} drive · ${state.legs[k].distanceText}</div>
+      </div>
+    `;
+    tl.appendChild(li);
+  }
+}
+
+function navigateToCurrentStop(){
+  const stop = state.order[state.currentIndex];
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=driving`;
+  window.open(url, '_blank');
+}
+
+function onArrived(){
+  const i = state.currentIndex;
+  const stop = state.order[i];
+  state.arrivals.push({ index: i, at: Date.now() });
+
+  document.getElementById('nav-actions-card').style.display = 'none';
+  const slot = document.getElementById('arrived-panel-slot');
+  slot.innerHTML = `
+    <div class="arrived-panel">
+      <div class="check">✅</div>
+      <div class="msg">Arrived at ${shortAddress(stop.address)}</div>
+      <div class="msg-sub">Logged at ${formatClock(new Date())}. Allow about 3 minutes at the door.</div>
+      <div class="confirm-row">
+        <button class="btn-secondary" id="btn-not-yet">Not yet</button>
+        <button class="btn-primary" id="btn-next-stop">Move to next stop?</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-not-yet').addEventListener('click', () => {
+    slot.innerHTML = '';
+    document.getElementById('nav-actions-card').style.display = 'block';
+    state.arrivals.pop();
+  });
+  document.getElementById('btn-next-stop').addEventListener('click', advanceStop);
+}
+
+function advanceStop(){
+  const n = state.order.length;
+  state.currentIndex += 1;
+  if (state.currentIndex >= n){
+    finishTrip();
+  } else {
+    renderActive();
+  }
+}
+
+function finishTrip(){
+  const n = state.order.length;
+  const actualSeconds = (Date.now() - state.tripStartedAt) / 1000;
+  const { totalSeconds: estimatedSeconds } = computeTripSeconds();
+
+  document.getElementById('cp-stops').textContent = n;
+  document.getElementById('cp-actual').textContent = formatDuration(actualSeconds);
+  document.getElementById('cp-estimate').textContent = formatDuration(estimatedSeconds);
+  document.getElementById('complete-sub').textContent =
+    state.routeType === 'roundtrip'
+      ? `Don't forget the drive back to ${shortAddress(state.start.address)}.`
+      : `Route finished at the last delivery stop.`;
+
+  const tl = document.getElementById('cp-timeline');
+  tl.innerHTML = '';
+  state.order.forEach((stop, i) => {
+    const arrival = state.arrivals.find(a => a.index === i);
+    const li = document.createElement('li');
+    li.className = 'done';
+    li.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">✓</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">${shortAddress(stop.address)}</span>
+          <span class="eta">${arrival ? formatClock(new Date(arrival.at)) : '—'}</span>
+        </div>
+      </div>
+    `;
+    tl.appendChild(li);
+  });
+
+  showScreen('screen-complete');
+}
+
+function resetApp(){
+  // clear stop rows
+  document.getElementById('stops-container').innerHTML = '';
+  stopFields.clear();
+  startFieldData = null;
+  document.getElementById('start-status').classList.remove('ok');
+  const slot = document.getElementById('start-slot');
+  slot.innerHTML = '';
+  buildStartField();
+  addStopRow();
+  state.order = [];
+  state.legs = [];
+  state.currentIndex = 0;
+  state.arrivals = [];
+  validateSetup();
+  showScreen('screen-setup');
+}
+
+/* ---------------- Load Google Maps JS API ---------------- */
+(function loadGoogleMaps(){
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${window.GOOGLE_MAPS_API_KEY}&libraries=places,marker&v=weekly&callback=initApp&loading=async`;
+  s.async = true;
+  s.defer = true;
+  document.head.appendChild(s);
+})();
+
+/* ---------------- Service worker ---------------- */
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
