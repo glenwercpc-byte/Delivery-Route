@@ -759,6 +759,7 @@ const state = {
   currentIndex: 0,
   tripStartedAt: null,
   arrivals: [],          // [{stopIndexInOrder, at: timestamp}]
+  returnArrivalAt: null, // timestamp when back at start (roundtrip only)
   awaitingNextConfirm: false,
 };
 
@@ -1115,6 +1116,7 @@ function startDeliveries(){
   state.tripStartedAt = Date.now();
   state.currentIndex = 0;
   state.arrivals = [];
+  state.returnArrivalAt = null;
   state.awaitingNextConfirm = false;
   renderActive();
   showScreen('screen-active');
@@ -1123,30 +1125,40 @@ function startDeliveries(){
 function renderActive(){
   const n = state.order.length;
   const i = state.currentIndex;
-  const stop = state.order[i];
+  const isReturnStage = state.routeType === 'roundtrip' && i === n;
+  const totalStages = n + (state.routeType === 'roundtrip' ? 1 : 0);
 
   // progress strip
   const strip = document.getElementById('progress-strip');
   strip.innerHTML = '';
-  for (let s = 0; s < n; s++){
+  for (let s = 0; s < totalStages; s++){
     const seg = document.createElement('div');
     seg.className = 'seg' + (s < i ? ' done' : s === i ? ' current' : '');
     strip.appendChild(seg);
   }
 
-  document.getElementById('stage-eyebrow').textContent = `Stop ${i+1} of ${n}`;
-  document.getElementById('stage-address').textContent = shortAddress(stop.address);
-  document.getElementById('stage-drivetime').textContent = formatDuration(state.legs[i].duration);
+  if (isReturnStage){
+    document.getElementById('stage-eyebrow').textContent = 'Returning to shop';
+    document.getElementById('stage-address').textContent = shortAddress(state.start.address);
+    document.getElementById('stage-drivetime').textContent = formatDuration(state.legs[n].duration);
+    document.getElementById('stage-remaining').textContent = formatDuration(state.legs[n].duration);
+    document.getElementById('stage-eta').textContent = formatClock(new Date(Date.now() + state.legs[n].duration*1000));
+  } else {
+    const stop = state.order[i];
+    document.getElementById('stage-eyebrow').textContent = `Stop ${i+1} of ${n}`;
+    document.getElementById('stage-address').textContent = shortAddress(stop.address);
+    document.getElementById('stage-drivetime').textContent = formatDuration(state.legs[i].duration);
 
-  // remaining time = remaining driving legs (+ return leg if roundtrip) + remaining door times
-  let remaining = 0;
-  for (let k = i; k < n; k++){
-    remaining += state.legs[k].duration + DOOR_SECONDS;
+    // remaining time = remaining driving legs (+ return leg if roundtrip) + remaining door times
+    let remaining = 0;
+    for (let k = i; k < n; k++){
+      remaining += state.legs[k].duration + DOOR_SECONDS;
+    }
+    if (state.routeType === 'roundtrip') remaining += state.legs[n].duration;
+
+    document.getElementById('stage-remaining').textContent = formatDuration(remaining);
+    document.getElementById('stage-eta').textContent = formatClock(new Date(Date.now() + remaining*1000));
   }
-  if (state.routeType === 'roundtrip') remaining += state.legs[n].duration;
-
-  document.getElementById('stage-remaining').textContent = formatDuration(remaining);
-  document.getElementById('stage-eta').textContent = formatClock(new Date(Date.now() + remaining*1000));
 
   document.getElementById('arrived-panel-slot').innerHTML = '';
   document.getElementById('nav-actions-card').style.display = 'block';
@@ -1196,6 +1208,7 @@ function renderActive(){
 
   if (state.routeType === 'roundtrip'){
     const returnLi = document.createElement('li');
+    returnLi.className = isReturnStage ? 'current' : '';
     returnLi.innerHTML = `
       <div class="rail">
         <div class="stem top"></div>
@@ -1214,48 +1227,63 @@ function renderActive(){
 }
 
 function navigateToCurrentStop(){
-  const stop = state.order[state.currentIndex];
-  let url = `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=driving`;
-  if (state.currentIndex === 0){
+  const n = state.order.length;
+  const isReturnStage = state.routeType === 'roundtrip' && state.currentIndex === n;
+  const dest = isReturnStage ? state.start : state.order[state.currentIndex];
+  let url = `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving`;
+  if (state.currentIndex === 0 && !isReturnStage){
     // First leg: navigate from the shop's start address rather than live GPS,
     // since the driver may not be physically there yet when testing/planning.
     url += `&origin=${state.start.lat},${state.start.lng}`;
   }
-  // Later legs intentionally omit origin so Google Maps uses the driver's
-  // live location — they're already out on the road by then.
+  // Later legs (including the return leg) intentionally omit origin so
+  // Google Maps uses the driver's live location — they're already on the road.
   window.open(url, '_blank');
 }
 
 function onArrived(){
+  const n = state.order.length;
   const i = state.currentIndex;
-  const stop = state.order[i];
-  state.arrivals.push({ index: i, at: Date.now() });
+  const isReturnStage = state.routeType === 'roundtrip' && i === n;
+  const label = isReturnStage ? shortAddress(state.start.address) : shortAddress(state.order[i].address);
+
+  if (isReturnStage){
+    state.returnArrivalAt = Date.now();
+  } else {
+    state.arrivals.push({ index: i, at: Date.now() });
+  }
 
   document.getElementById('nav-actions-card').style.display = 'none';
   const slot = document.getElementById('arrived-panel-slot');
+  const nextLabel = isReturnStage ? 'Finish' : 'Move to next stop?';
+  const subText = isReturnStage
+    ? `Logged at ${formatClock(new Date())}. Nice work today!`
+    : `Logged at ${formatClock(new Date())}. Allow about 3 minutes at the door.`;
   slot.innerHTML = `
     <div class="arrived-panel">
       <div class="check">✅</div>
-      <div class="msg">Arrived at ${shortAddress(stop.address)}</div>
-      <div class="msg-sub">Logged at ${formatClock(new Date())}. Allow about 3 minutes at the door.</div>
+      <div class="msg">${isReturnStage ? 'Back at' : 'Arrived at'} ${label}</div>
+      <div class="msg-sub">${subText}</div>
       <div class="confirm-row">
         <button class="btn-secondary" id="btn-not-yet">Not yet</button>
-        <button class="btn-primary" id="btn-next-stop">Move to next stop?</button>
+        <button class="btn-primary" id="btn-next-stop">${nextLabel}</button>
       </div>
     </div>
   `;
   document.getElementById('btn-not-yet').addEventListener('click', () => {
     slot.innerHTML = '';
     document.getElementById('nav-actions-card').style.display = 'block';
-    state.arrivals.pop();
+    if (isReturnStage) state.returnArrivalAt = null;
+    else state.arrivals.pop();
   });
   document.getElementById('btn-next-stop').addEventListener('click', advanceStop);
 }
 
 function advanceStop(){
   const n = state.order.length;
+  const totalStages = n + (state.routeType === 'roundtrip' ? 1 : 0);
   state.currentIndex += 1;
-  if (state.currentIndex >= n){
+  if (state.currentIndex >= totalStages){
     finishTrip();
   } else {
     renderActive();
@@ -1272,11 +1300,31 @@ function finishTrip(){
   document.getElementById('cp-estimate').textContent = formatDuration(estimatedSeconds);
   document.getElementById('complete-sub').textContent =
     state.routeType === 'roundtrip'
-      ? `Don't forget the drive back to ${shortAddress(state.start.address)}.`
+      ? `Back at ${shortAddress(state.start.address)}. Nice work today!`
       : `Route finished at the last delivery stop.`;
 
   const tl = document.getElementById('cp-timeline');
   tl.innerHTML = '';
+
+  if (state.routeType === 'roundtrip'){
+    const startLi = document.createElement('li');
+    startLi.className = 'done';
+    startLi.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">🏠</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">${shortAddress(state.start.address)}</span>
+        </div>
+        <div class="leg-meta">Starting point</div>
+      </div>
+    `;
+    tl.appendChild(startLi);
+  }
+
   state.order.forEach((stop, i) => {
     const arrival = state.arrivals.find(a => a.index === i);
     const li = document.createElement('li');
@@ -1297,6 +1345,25 @@ function finishTrip(){
     tl.appendChild(li);
   });
 
+  if (state.routeType === 'roundtrip'){
+    const returnLi = document.createElement('li');
+    returnLi.className = 'done';
+    returnLi.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">✓</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">Return to ${shortAddress(state.start.address)}</span>
+          <span class="eta">${state.returnArrivalAt ? formatClock(new Date(state.returnArrivalAt)) : '—'}</span>
+        </div>
+      </div>
+    `;
+    tl.appendChild(returnLi);
+  }
+
   showScreen('screen-complete');
 }
 
@@ -1310,6 +1377,7 @@ function resetApp(){
   state.legs = [];
   state.currentIndex = 0;
   state.arrivals = [];
+  state.returnArrivalAt = null;
   validateSetup();
   showScreen('screen-setup');
 }
