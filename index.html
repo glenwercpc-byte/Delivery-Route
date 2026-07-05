@@ -145,6 +145,26 @@
     --gmp-mat-color-surface: #fff;
     --gmp-mat-color-on-surface: var(--ink);
   }
+  .start-readonly{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:11px 12px;
+  }
+  .start-readonly-addr{
+    font-size:14px;
+    font-weight:600;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .start-readonly .btn-inline{
+    flex:none;
+    font-size:12.5px;
+    padding:4px 0;
+  }
   .addr-status{
     flex:none;
     width:26px;height:26px;
@@ -555,7 +575,7 @@
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1.8 1.8 1.8 4.6 0 6.4C10.2 6.6 10.2 3.8 12 2z" fill="#F9E7CF"/><circle cx="12" cy="12" r="2" fill="#FBF8F3"/><path d="M12 4.6c1.8 1.8 1.8 4.6 0 6.4-1.8-1.8-1.8-4.6 0-6.4z" fill="#E8546B"/><path d="M19.4 12c-1.8 1.8-4.6 1.8-6.4 0 1.8-1.8 4.6-1.8 6.4 0z" fill="#E8546B"/><path d="M12 19.4c-1.8-1.8-1.8-4.6 0-6.4 1.8 1.8 1.8 4.6 0 6.4z" fill="#E8546B"/><path d="M4.6 12c1.8-1.8 4.6-1.8 6.4 0-1.8 1.8-4.6 1.8-6.4 0z" fill="#E8546B"/></svg>
     </div>
     <div>
-      <h1>Blossom Route</h1>
+      <h1 id="app-title" style="cursor:pointer;" title="Tap to start over">Blossom Route</h1>
       <div class="sub" id="header-sub">Plan today's deliveries</div>
     </div>
   </div>
@@ -728,6 +748,7 @@ window.GOOGLE_MAPS_API_KEY = "AIzaSyAjSeM4w7NeCorvDOdzAzmzzms7Db7qNa4";
 
 /* ---------------- App state ---------------- */
 const DOOR_SECONDS = 180; // average 3 minutes at each door
+const DEFAULT_START_ADDRESS = "1813 Waukegan Rd, Glenview, IL 60025";
 
 const state = {
   start: null,          // {address, lat, lng}
@@ -797,7 +818,7 @@ async function initApp(){
     polylineOptions: { strokeColor: '#1F3A2E', strokeWeight: 5, strokeOpacity: 0.9 }
   });
 
-  buildStartField();
+  initDefaultStart();
   addStopRow(); // start with one empty stop row
   wireStaticEvents();
 }
@@ -808,8 +829,52 @@ function makeAutocompleteEl(placeholder){
   return el;
 }
 
-function buildStartField(){
+/* Start address defaults to the shop address, shown read-only with a
+   "Change" link so it can still be edited whenever needed. */
+async function initDefaultStart(){
+  try{
+    const res = await geocoder.geocode({ address: DEFAULT_START_ADDRESS });
+    if (res.results[0]){
+      const loc = res.results[0].geometry.location;
+      startFieldData = {
+        address: res.results[0].formatted_address,
+        lat: loc.lat(),
+        lng: loc.lng(),
+      };
+      renderStartReadonly(startFieldData.address);
+    } else {
+      enterStartEditMode();
+    }
+  }catch(e){
+    enterStartEditMode();
+  }
+  validateSetup();
+}
+
+function renderStartReadonly(address){
   const slot = document.getElementById('start-slot');
+  slot.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'start-readonly';
+  const addrEl = document.createElement('span');
+  addrEl.className = 'start-readonly-addr';
+  addrEl.textContent = shortAddress(address);
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'btn-inline';
+  editBtn.textContent = '✎ Change';
+  editBtn.addEventListener('click', enterStartEditMode);
+  wrap.appendChild(addrEl);
+  wrap.appendChild(editBtn);
+  slot.appendChild(wrap);
+  document.getElementById('start-status').classList.add('ok');
+}
+
+function enterStartEditMode(){
+  startFieldData = null;
+  document.getElementById('start-status').classList.remove('ok');
+  const slot = document.getElementById('start-slot');
+  slot.innerHTML = '';
   const el = makeAutocompleteEl('Enter shop / starting address');
   slot.appendChild(el);
   el.addEventListener('gmp-select', async ({ placePrediction }) => {
@@ -821,12 +886,13 @@ function buildStartField(){
         lat: place.location.lat(),
         lng: place.location.lng(),
       };
-      document.getElementById('start-status').classList.add('ok');
+      renderStartReadonly(startFieldData.address);
       validateSetup();
     }catch(err){
       showToast("Couldn't read that address — please try selecting it again.");
     }
   });
+  validateSetup();
 }
 
 function addStopRow(){
@@ -907,6 +973,14 @@ function wireStaticEvents(){
   document.getElementById('btn-navigate').addEventListener('click', navigateToCurrentStop);
   document.getElementById('btn-arrived').addEventListener('click', onArrived);
   document.getElementById('btn-new-route').addEventListener('click', resetApp);
+
+  document.getElementById('app-title').addEventListener('click', () => {
+    const hasRoute = state.order.length > 0;
+    if (hasRoute && !confirm('Start over? This will clear the current route.')){
+      return;
+    }
+    resetApp();
+  });
 }
 
 function useCurrentLocation(){
@@ -922,14 +996,7 @@ function useCurrentLocation(){
       const res = await geocoder.geocode({ location: { lat, lng } });
       const address = res.results[0] ? res.results[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       startFieldData = { address, lat, lng };
-      const slot = document.getElementById('start-slot');
-      slot.innerHTML = '';
-      const readOnlyEl = document.createElement('div');
-      readOnlyEl.style.padding = '11px 12px';
-      readOnlyEl.style.fontSize = '14px';
-      readOnlyEl.textContent = shortAddress(address);
-      slot.appendChild(readOnlyEl);
-      document.getElementById('start-status').classList.add('ok');
+      renderStartReadonly(address);
       validateSetup();
     }catch(e){
       showToast("Couldn't determine your address from GPS. Please type it in instead.");
@@ -1087,6 +1154,26 @@ function renderActive(){
   // upcoming timeline (remaining stops, current highlighted)
   const tl = document.getElementById('active-timeline');
   tl.innerHTML = '';
+
+  if (state.routeType === 'roundtrip'){
+    const startLi = document.createElement('li');
+    startLi.className = 'done';
+    startLi.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">🏠</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">${shortAddress(state.start.address)}</span>
+        </div>
+        <div class="leg-meta">Starting point</div>
+      </div>
+    `;
+    tl.appendChild(startLi);
+  }
+
   for (let k = i; k < n; k++){
     const s = state.order[k];
     const li = document.createElement('li');
@@ -1105,6 +1192,24 @@ function renderActive(){
       </div>
     `;
     tl.appendChild(li);
+  }
+
+  if (state.routeType === 'roundtrip'){
+    const returnLi = document.createElement('li');
+    returnLi.innerHTML = `
+      <div class="rail">
+        <div class="stem top"></div>
+        <div class="bud">🏠</div>
+        <div class="stem bottom"></div>
+      </div>
+      <div class="content">
+        <div class="row-top">
+          <span class="addr">Return to ${shortAddress(state.start.address)}</span>
+        </div>
+        <div class="leg-meta">${formatDuration(state.legs[n].duration)} drive · ${state.legs[n].distanceText}</div>
+      </div>
+    `;
+    tl.appendChild(returnLi);
   }
 }
 
@@ -1192,11 +1297,7 @@ function resetApp(){
   // clear stop rows
   document.getElementById('stops-container').innerHTML = '';
   stopFields.clear();
-  startFieldData = null;
-  document.getElementById('start-status').classList.remove('ok');
-  const slot = document.getElementById('start-slot');
-  slot.innerHTML = '';
-  buildStartField();
+  initDefaultStart();
   addStopRow();
   state.order = [];
   state.legs = [];
