@@ -142,6 +142,16 @@
     white-space:nowrap;
   }
   .btn-chip:hover{background:#F2F7F1;}
+  @keyframes voicePulse{
+    0%,100%{opacity:1;}
+    50%{opacity:0.55;}
+  }
+  .btn-chip.listening{
+    background:var(--bloom);
+    color:#fff;
+    border-color:var(--bloom);
+    animation:voicePulse 1.2s ease-in-out infinite;
+  }
   .saved-routes-row{margin-bottom:12px;}
   #saved-routes-select{
     width:100%;
@@ -674,6 +684,7 @@
         <div class="card-header-row">
           <h2 class="section-title" style="margin-bottom:0;">Delivery stops</h2>
           <div class="header-actions">
+            <button class="btn-chip" id="btn-voice-toggle" type="button">🎤 Voice</button>
             <button class="btn-chip" id="btn-save-route" type="button">💾 Save</button>
             <button class="btn-chip" id="btn-delete-route" type="button">🗑️ Delete</button>
           </div>
@@ -1046,6 +1057,131 @@ function addStopRow(prefill){
   });
 }
 
+/* ---------------- Voice input (Web Speech API) ---------------- */
+let recognition = null;
+let voiceActive = false;
+let voicePendingRowId = null;
+
+function supportsSpeechRecognition(){
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function initSpeechRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new SR();
+  rec.lang = 'ko-KR';
+  rec.continuous = true;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = (event) => {
+    const result = event.results[event.results.length - 1];
+    if (!result.isFinal) return;
+    const transcript = result[0].transcript.trim();
+    if (transcript) handleVoiceTranscript(transcript);
+  };
+
+  rec.onerror = (event) => {
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed'){
+      showToast('Microphone permission was denied.');
+      stopVoiceInput();
+    }
+    // 'no-speech' / 'aborted' happen often during normal pauses — the
+    // restart-on-end loop below keeps listening through those.
+  };
+
+  rec.onend = () => {
+    if (voiceActive){
+      try{ rec.start(); }catch(e){ /* already running */ }
+    }
+  };
+
+  return rec;
+}
+
+function isAddStopCommand(text){
+  const t = text.toLowerCase().replace(/\s+/g, '');
+  return t.includes('추가') || t.includes('adddeliverystop') || t.includes('addstop') || t.includes('add다음');
+}
+
+function fillStopRowFromGeocode(rowId, geocodeResult){
+  const entry = stopFields.get(rowId);
+  if (!entry) return;
+  const loc = geocodeResult.geometry.location;
+  entry.data = {
+    address: geocodeResult.formatted_address,
+    lat: loc.lat(),
+    lng: loc.lng(),
+  };
+  entry.statusEl.classList.add('ok');
+  const slot = entry.wrapperEl.querySelector('.addr-slot');
+  slot.innerHTML = '';
+  const readOnlyEl = document.createElement('div');
+  readOnlyEl.className = 'stop-readonly-addr';
+  readOnlyEl.textContent = shortAddress(entry.data.address);
+  slot.appendChild(readOnlyEl);
+  validateSetup();
+}
+
+async function handleVoiceTranscript(transcript){
+  showToast(`🎤 "${transcript}"`);
+
+  if (isAddStopCommand(transcript)){
+    addStopRow();
+    const ids = [...stopFields.keys()];
+    voicePendingRowId = ids[ids.length - 1];
+    return;
+  }
+
+  // Otherwise, treat what was said as a delivery address.
+  if (!voicePendingRowId || !stopFields.has(voicePendingRowId) || stopFields.get(voicePendingRowId).data){
+    // No open blank stop waiting for input — create one automatically.
+    addStopRow();
+    const ids = [...stopFields.keys()];
+    voicePendingRowId = ids[ids.length - 1];
+  }
+
+  const targetId = voicePendingRowId;
+  try{
+    const res = await geocoder.geocode({ address: transcript, region: 'us' });
+    if (!res.results[0]){
+      showToast(`Couldn't find an address for "${transcript}".`);
+      return;
+    }
+    fillStopRowFromGeocode(targetId, res.results[0]);
+    voicePendingRowId = null;
+  }catch(e){
+    showToast("Couldn't look up that address — please try again.");
+  }
+}
+
+function toggleVoiceInput(){
+  if (!supportsSpeechRecognition()){
+    showToast('Voice input is not supported in this browser.');
+    return;
+  }
+  const btn = document.getElementById('btn-voice-toggle');
+  if (voiceActive){
+    stopVoiceInput();
+  } else {
+    if (!recognition) recognition = initSpeechRecognition();
+    voiceActive = true;
+    voicePendingRowId = null;
+    btn.classList.add('listening');
+    btn.textContent = '🎤 Listening…';
+    try{ recognition.start(); }catch(e){ /* already started */ }
+    showToast('Voice on — say an address, or say "추가" / "Add delivery stop" for a new stop.');
+  }
+}
+
+function stopVoiceInput(){
+  voiceActive = false;
+  voicePendingRowId = null;
+  const btn = document.getElementById('btn-voice-toggle');
+  if (btn){ btn.classList.remove('listening'); btn.textContent = '🎤 Voice'; }
+  if (recognition){ try{ recognition.stop(); }catch(e){ /* already stopped */ } }
+}
+
 function validateSetup(){
   const validStops = [...stopFields.values()].filter(f => f.data);
   const ok = !!startFieldData && validStops.length >= 1;
@@ -1146,6 +1282,7 @@ function loadRouteIntoSetup(id){
 
 function wireStaticEvents(){
   document.getElementById('btn-add-stop').addEventListener('click', () => addStopRow());
+  document.getElementById('btn-voice-toggle').addEventListener('click', toggleVoiceInput);
 
   document.getElementById('btn-save-route').addEventListener('click', saveCurrentRoute);
   document.getElementById('btn-delete-route').addEventListener('click', deleteSelectedRoute);
@@ -1218,6 +1355,8 @@ function useCurrentLocation(){
 function calculateRoute(){
   const validStops = [...stopFields.values()].filter(f => f.data).map(f => f.data);
   if (!startFieldData || validStops.length === 0) return;
+
+  stopVoiceInput();
 
   const buildBtn = document.getElementById('btn-build-route');
   buildBtn.disabled = true;
@@ -1678,6 +1817,7 @@ function finishTrip(){
 }
 
 function resetApp(){
+  stopVoiceInput();
   // clear stop rows
   document.getElementById('stops-container').innerHTML = '';
   stopFields.clear();
