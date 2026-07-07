@@ -170,6 +170,24 @@
     text-overflow:ellipsis;
     white-space:nowrap;
   }
+  .stop-voice-pending{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:8px 10px;
+  }
+  .stop-voice-pending .stop-readonly-addr{
+    padding:0;
+    flex:1;
+    min-width:0;
+  }
+  .stop-voice-pending .btn-chip{
+    flex:none;
+    background:var(--forest);
+    color:#fff;
+    border-color:var(--forest);
+  }
 
   label.field-label{
     display:block;
@@ -1059,7 +1077,7 @@ function addStopRow(prefill){
 
 /* ---------------- Voice input (Web Speech API) ---------------- */
 let recognition = null;
-let voiceActive = false;
+let voiceListening = false;
 let voicePendingRowId = null;
 
 function supportsSpeechRecognition(){
@@ -1070,7 +1088,7 @@ function initSpeechRecognition(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const rec = new SR();
   rec.lang = 'en-US';
-  rec.continuous = true;
+  rec.continuous = false;   // single-shot: one press = one address
   rec.interimResults = false;
   rec.maxAlternatives = 1;
 
@@ -1084,75 +1102,85 @@ function initSpeechRecognition(){
   rec.onerror = (event) => {
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed'){
       showToast('Microphone permission was denied.');
-      stopVoiceInput();
+    } else if (event.error !== 'no-speech' && event.error !== 'aborted'){
+      showToast("Didn't catch that — try the mic button again.");
     }
-    // 'no-speech' / 'aborted' happen often during normal pauses — the
-    // restart-on-end loop below keeps listening through those.
   };
 
   rec.onend = () => {
-    if (voiceActive){
-      try{ rec.start(); }catch(e){ /* already running */ }
-    }
+    // Single-shot: the mic always turns itself off after one listening pass.
+    setVoiceListening(false);
   };
 
   return rec;
 }
 
-function isAddStopCommand(text){
-  const t = text.toLowerCase().replace(/\s+/g, '');
-  return t.includes('adddeliverystop') || t.includes('addstop') || t.includes('addanewstop');
-}
-
-function fillStopRowFromGeocode(rowId, geocodeResult){
-  const entry = stopFields.get(rowId);
-  if (!entry) return;
-  const loc = geocodeResult.geometry.location;
-  entry.data = {
-    address: geocodeResult.formatted_address,
-    lat: loc.lat(),
-    lng: loc.lng(),
-  };
-  entry.statusEl.classList.add('ok');
-  const slot = entry.wrapperEl.querySelector('.addr-slot');
-  slot.innerHTML = '';
-  const readOnlyEl = document.createElement('div');
-  readOnlyEl.className = 'stop-readonly-addr';
-  readOnlyEl.textContent = shortAddress(entry.data.address);
-  slot.appendChild(readOnlyEl);
-  validateSetup();
+function setVoiceListening(isListening){
+  voiceListening = isListening;
+  const btn = document.getElementById('btn-voice-toggle');
+  if (!btn) return;
+  if (isListening){
+    btn.classList.add('listening');
+    btn.textContent = '🎤 Listening…';
+  } else {
+    btn.classList.remove('listening');
+    btn.textContent = '🎤 Voice';
+  }
 }
 
 async function handleVoiceTranscript(transcript){
   showToast(`🎤 "${transcript}"`);
+  const rowId = voicePendingRowId;
+  if (!rowId || !stopFields.has(rowId)) return;
 
-  if (isAddStopCommand(transcript)){
-    addStopRow();
-    const ids = [...stopFields.keys()];
-    voicePendingRowId = ids[ids.length - 1];
-    return;
-  }
-
-  // Otherwise, treat what was said as a delivery address.
-  if (!voicePendingRowId || !stopFields.has(voicePendingRowId) || stopFields.get(voicePendingRowId).data){
-    // No open blank stop waiting for input — create one automatically.
-    addStopRow();
-    const ids = [...stopFields.keys()];
-    voicePendingRowId = ids[ids.length - 1];
-  }
-
-  const targetId = voicePendingRowId;
   try{
     const res = await geocoder.geocode({ address: transcript, region: 'us' });
     if (!res.results[0]){
-      showToast(`Couldn't find an address for "${transcript}".`);
+      showToast(`Couldn't find an address for "${transcript}". Tap the mic to try again.`);
       return;
     }
-    fillStopRowFromGeocode(targetId, res.results[0]);
-    voicePendingRowId = null;
+    showVoiceConfirm(rowId, res.results[0]);
   }catch(e){
-    showToast("Couldn't look up that address — please try again.");
+    showToast("Couldn't look up that address — tap the mic to try again.");
   }
+}
+
+function showVoiceConfirm(rowId, geocodeResult){
+  const entry = stopFields.get(rowId);
+  if (!entry) return;
+  const slot = entry.wrapperEl.querySelector('.addr-slot');
+  slot.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'stop-voice-pending';
+
+  const addrEl = document.createElement('div');
+  addrEl.className = 'stop-readonly-addr';
+  addrEl.textContent = shortAddress(geocodeResult.formatted_address);
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'btn-chip';
+  confirmBtn.textContent = '✔ Confirm';
+  confirmBtn.addEventListener('click', () => {
+    const loc = geocodeResult.geometry.location;
+    entry.data = {
+      address: geocodeResult.formatted_address,
+      lat: loc.lat(),
+      lng: loc.lng(),
+    };
+    entry.statusEl.classList.add('ok');
+    slot.innerHTML = '';
+    const finalEl = document.createElement('div');
+    finalEl.className = 'stop-readonly-addr';
+    finalEl.textContent = shortAddress(entry.data.address);
+    slot.appendChild(finalEl);
+    validateSetup();
+  });
+
+  wrap.appendChild(addrEl);
+  wrap.appendChild(confirmBtn);
+  slot.appendChild(wrap);
 }
 
 function toggleVoiceInput(){
@@ -1160,26 +1188,25 @@ function toggleVoiceInput(){
     showToast('Voice input is not supported in this browser.');
     return;
   }
-  const btn = document.getElementById('btn-voice-toggle');
-  if (voiceActive){
+  if (voiceListening){
     stopVoiceInput();
-  } else {
-    if (!recognition) recognition = initSpeechRecognition();
-    voiceActive = true;
-    voicePendingRowId = null;
-    btn.classList.add('listening');
-    btn.textContent = '🎤 Listening…';
-    try{ recognition.start(); }catch(e){ /* already started */ }
-    showToast('Voice on — say an address, or say "Add delivery stop" for a new stop.');
+    return;
   }
+  if (!recognition) recognition = initSpeechRecognition();
+
+  addStopRow();
+  const ids = [...stopFields.keys()];
+  voicePendingRowId = ids[ids.length - 1];
+
+  setVoiceListening(true);
+  try{ recognition.start(); }catch(e){ /* already running */ }
+  showToast('Voice on — say the delivery address.');
 }
 
 function stopVoiceInput(){
-  voiceActive = false;
   voicePendingRowId = null;
-  const btn = document.getElementById('btn-voice-toggle');
-  if (btn){ btn.classList.remove('listening'); btn.textContent = '🎤 Voice'; }
   if (recognition){ try{ recognition.stop(); }catch(e){ /* already stopped */ } }
+  setVoiceListening(false);
 }
 
 function validateSetup(){
