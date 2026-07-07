@@ -1069,7 +1069,7 @@ function supportsSpeechRecognition(){
 function initSpeechRecognition(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const rec = new SR();
-  rec.lang = 'ko-KR';
+  rec.lang = 'en-US';
   rec.continuous = true;
   rec.interimResults = false;
   rec.maxAlternatives = 1;
@@ -1101,7 +1101,7 @@ function initSpeechRecognition(){
 
 function isAddStopCommand(text){
   const t = text.toLowerCase().replace(/\s+/g, '');
-  return t.includes('추가') || t.includes('adddeliverystop') || t.includes('addstop') || t.includes('add다음');
+  return t.includes('adddeliverystop') || t.includes('addstop') || t.includes('addanewstop');
 }
 
 function fillStopRowFromGeocode(rowId, geocodeResult){
@@ -1170,7 +1170,7 @@ function toggleVoiceInput(){
     btn.classList.add('listening');
     btn.textContent = '🎤 Listening…';
     try{ recognition.start(); }catch(e){ /* already started */ }
-    showToast('Voice on — say an address, or say "추가" / "Add delivery stop" for a new stop.');
+    showToast('Voice on — say an address, or say "Add delivery stop" for a new stop.');
   }
 }
 
