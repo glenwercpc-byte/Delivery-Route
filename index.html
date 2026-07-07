@@ -712,7 +712,9 @@
             <option value="">— New route —</option>
           </select>
         </div>
-        <div id="stops-container"></div>
+        <div id="stops-container">
+          <div class="empty-hint" id="stops-empty-hint">No delivery stops yet — tap <strong>+ Add delivery stop</strong> or <strong>🎤 Voice</strong> below.</div>
+        </div>
         <button class="btn-ghost-add" id="btn-add-stop" type="button">+ Add delivery stop</button>
       </div>
 
@@ -935,7 +937,6 @@ async function initApp(){
   });
 
   initDefaultStart();
-  addStopRow(); // start with one empty stop row
   wireStaticEvents();
 }
 
@@ -1011,6 +1012,17 @@ function enterStartEditMode(){
   validateSetup();
 }
 
+function refreshStopsEmptyHint(){
+  const hint = document.getElementById('stops-empty-hint');
+  if (hint) hint.style.display = stopFields.size === 0 ? 'block' : 'none';
+}
+
+function clearStopsContainer(){
+  document.querySelectorAll('#stops-container .addr-row').forEach(el => el.remove());
+  stopFields.clear();
+  refreshStopsEmptyHint();
+}
+
 function addStopRow(prefill){
   const id = ++stopFieldSeq;
   const container = document.getElementById('stops-container');
@@ -1033,6 +1045,7 @@ function addStopRow(prefill){
   remove.addEventListener('click', () => {
     row.remove();
     stopFields.delete(id);
+    refreshStopsEmptyHint();
     validateSetup();
   });
 
@@ -1043,6 +1056,7 @@ function addStopRow(prefill){
 
   const entry = { wrapperEl: row, statusEl: status, data: null };
   stopFields.set(id, entry);
+  refreshStopsEmptyHint();
 
   if (prefill){
     // Loaded from a saved route — show as read-only text (no re-search needed).
@@ -1295,8 +1309,7 @@ function loadRouteIntoSetup(id){
   startFieldData = route.start;
   renderStartReadonly(startFieldData.address);
 
-  document.getElementById('stops-container').innerHTML = '';
-  stopFields.clear();
+  clearStopsContainer();
   route.stops.forEach(s => addStopRow(s));
 
   document.querySelectorAll('.route-opt').forEach(o => {
@@ -1316,9 +1329,7 @@ function wireStaticEvents(){
   document.getElementById('saved-routes-select').addEventListener('change', (e) => {
     const id = e.target.value;
     if (!id){
-      document.getElementById('stops-container').innerHTML = '';
-      stopFields.clear();
-      addStopRow();
+      clearStopsContainer();
       validateSetup();
       return;
     }
@@ -1846,10 +1857,8 @@ function finishTrip(){
 function resetApp(){
   stopVoiceInput();
   // clear stop rows
-  document.getElementById('stops-container').innerHTML = '';
-  stopFields.clear();
+  clearStopsContainer();
   initDefaultStart();
-  addStopRow();
   state.order = [];
   state.legs = [];
   state.currentIndex = 0;
