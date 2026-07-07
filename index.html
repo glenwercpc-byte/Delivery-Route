@@ -482,6 +482,36 @@
   .progress-strip .seg.done{background:var(--forest);}
   .progress-strip .seg.current{background:var(--bloom);}
 
+  .active-map-wrap{
+    position:relative;
+    margin-bottom:16px;
+  }
+  #active-map{
+    width:100%;
+    height:230px;
+    border-radius:var(--r-lg);
+    overflow:hidden;
+    border:1px solid var(--border);
+    background:var(--sage);
+  }
+  .btn-arrived-float{
+    position:absolute;
+    left:50%;
+    bottom:14px;
+    transform:translateX(-50%);
+    padding:14px 30px;
+    border:none;
+    border-radius:999px;
+    background:var(--bloom);
+    color:#fff;
+    font-weight:800;
+    font-size:16px;
+    box-shadow:0 10px 26px rgba(232,84,107,0.5);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .btn-arrived-float:active{transform:translateX(-50%) scale(0.97);}
+
   .stage-card{
     background:var(--forest);
     color:#fff;
@@ -719,6 +749,11 @@
     <section class="screen" id="screen-active">
       <div class="progress-strip" id="progress-strip"></div>
 
+      <div class="active-map-wrap">
+        <div id="active-map"></div>
+        <button class="btn-arrived-float" id="btn-arrived-float">✅ Arrived</button>
+      </div>
+
       <div class="stage-card">
         <div class="eyebrow" id="stage-eyebrow">Stop 1 of 1</div>
         <div class="address" id="stage-address">—</div>
@@ -738,12 +773,7 @@
         </div>
       </div>
 
-      <div id="arrived-panel-slot"></div>
-
-      <div class="card" id="nav-actions-card">
-        <button class="btn-secondary" id="btn-navigate" style="margin-bottom:10px;">🧭 Navigate to this stop</button>
-        <button class="btn-primary" id="btn-arrived">I've arrived</button>
-      </div>
+      <button class="btn-text" id="btn-reopen-nav" style="margin-top:-6px;">🧭 Reopen navigation for this stop</button>
 
       <div class="upcoming-title">Remaining stops</div>
       <ul class="timeline" id="active-timeline"></ul>
@@ -819,6 +849,7 @@ const state = {
 };
 
 let map, directionsRenderer, directionsService, geocoder;
+let activeMap, activeMapMarker;
 let stopFieldSeq = 0;
 const stopFields = new Map(); // id -> {wrapperEl, statusEl, data:{address,lat,lng}}
 let startFieldData = null;
@@ -1144,8 +1175,8 @@ function wireStaticEvents(){
   document.getElementById('btn-build-route').addEventListener('click', calculateRoute);
   document.getElementById('btn-back-setup').addEventListener('click', () => showScreen('screen-setup'));
   document.getElementById('btn-start-deliveries').addEventListener('click', startDeliveries);
-  document.getElementById('btn-navigate').addEventListener('click', navigateToCurrentStop);
-  document.getElementById('btn-arrived').addEventListener('click', onArrived);
+  document.getElementById('btn-reopen-nav').addEventListener('click', navigateToCurrentStop);
+  document.getElementById('btn-arrived-float').addEventListener('click', onArrived);
   document.getElementById('btn-new-route').addEventListener('click', resetApp);
 
   document.getElementById('app-title').addEventListener('click', () => {
@@ -1380,6 +1411,31 @@ function renderOverview(){
 }
 
 /* ---------------- Active delivery flow ---------------- */
+async function ensureActiveMap(){
+  if (activeMap) return;
+  const { Map } = await google.maps.importLibrary('maps');
+  activeMap = new Map(document.getElementById('active-map'), {
+    center: { lat: 41.8781, lng: -87.6298 },
+    zoom: 14,
+    disableDefaultUI: true,
+    zoomControl: true,
+    mapId: 'BLOSSOM_ROUTE_MAP',
+  });
+}
+
+async function updateActiveMap(position, label){
+  await ensureActiveMap();
+  const { AdvancedMarkerElement } = await google.maps.importLibrary('marker');
+  activeMap.setCenter({ lat: position.lat, lng: position.lng });
+  if (activeMapMarker) activeMapMarker.map = null;
+  activeMapMarker = new AdvancedMarkerElement({
+    map: activeMap,
+    position: { lat: position.lat, lng: position.lng },
+    content: makeNumberedPinContent('📍', { bg: '#E8546B', fontSize: '14px' }),
+    title: label,
+  });
+}
+
 function startDeliveries(){
   state.tripStartedAt = Date.now();
   state.currentIndex = 0;
@@ -1406,12 +1462,14 @@ function renderActive(){
     strip.appendChild(seg);
   }
 
+  let destPoint;
   if (isReturnStage){
     document.getElementById('stage-eyebrow').textContent = 'Returning to shop';
     document.getElementById('stage-address').textContent = shortAddress(state.start.address);
     document.getElementById('stage-drivetime').textContent = formatDuration(state.legs[n].duration);
     document.getElementById('stage-remaining').textContent = formatDuration(state.legs[n].duration);
     document.getElementById('stage-eta').textContent = formatClock(new Date(Date.now() + state.legs[n].duration*1000));
+    destPoint = state.start;
   } else {
     const stop = state.order[i];
     document.getElementById('stage-eyebrow').textContent = `Stop ${i+1} of ${n}`;
@@ -1427,10 +1485,10 @@ function renderActive(){
 
     document.getElementById('stage-remaining').textContent = formatDuration(remaining);
     document.getElementById('stage-eta').textContent = formatClock(new Date(Date.now() + remaining*1000));
+    destPoint = stop;
   }
 
-  document.getElementById('arrived-panel-slot').innerHTML = '';
-  document.getElementById('nav-actions-card').style.display = 'block';
+  updateActiveMap(destPoint, document.getElementById('stage-address').textContent);
 
   // upcoming timeline (remaining stops, current highlighted)
   const tl = document.getElementById('active-timeline');
@@ -1510,7 +1568,7 @@ function navigateToCurrentStop(){
     origin = state.order[i - 1];      // previous delivery -> this delivery
   }
 
-  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving`;
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving&dir_action=navigate`;
   window.open(url, '_blank');
 }
 
@@ -1526,30 +1584,8 @@ function onArrived(){
     state.arrivals.push({ index: i, at: Date.now() });
   }
 
-  document.getElementById('nav-actions-card').style.display = 'none';
-  const slot = document.getElementById('arrived-panel-slot');
-  const nextLabel = isReturnStage ? 'Finish' : 'Move to next stop?';
-  const subText = isReturnStage
-    ? `Logged at ${formatClock(new Date())}. Nice work today!`
-    : `Logged at ${formatClock(new Date())}. Allow about 3 minutes at the door.`;
-  slot.innerHTML = `
-    <div class="arrived-panel">
-      <div class="check">✅</div>
-      <div class="msg">${isReturnStage ? 'Back at' : 'Arrived at'} ${label}</div>
-      <div class="msg-sub">${subText}</div>
-      <div class="confirm-row">
-        <button class="btn-secondary" id="btn-not-yet">Not yet</button>
-        <button class="btn-primary" id="btn-next-stop">${nextLabel}</button>
-      </div>
-    </div>
-  `;
-  document.getElementById('btn-not-yet').addEventListener('click', () => {
-    slot.innerHTML = '';
-    document.getElementById('nav-actions-card').style.display = 'block';
-    if (isReturnStage) state.returnArrivalAt = null;
-    else state.arrivals.pop();
-  });
-  document.getElementById('btn-next-stop').addEventListener('click', advanceStop);
+  showToast(isReturnStage ? `Back at ${label}. Nice work today!` : `Arrived at ${label}`);
+  advanceStop();
 }
 
 function advanceStop(){
@@ -1560,6 +1596,7 @@ function advanceStop(){
     finishTrip();
   } else {
     renderActive();
+    navigateToCurrentStop(); // hand straight off to nav for the next leg
   }
 }
 
