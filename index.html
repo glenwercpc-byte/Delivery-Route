@@ -236,6 +236,15 @@
     font-size:12.5px;
     padding:4px 0;
   }
+  .start-change-options{
+    display:flex;
+    gap:8px;
+    padding:8px 10px;
+  }
+  .start-change-options .btn-chip{
+    flex:1;
+    text-align:center;
+  }
   .addr-status{
     flex:none;
     width:26px;height:26px;
@@ -528,15 +537,16 @@
     bottom:14px;
     transform:translateX(-50%);
     padding:14px 30px;
-    border:none;
+    border:2.5px solid var(--bloom);
     border-radius:999px;
-    background:var(--bloom);
-    color:#fff;
+    background:transparent;
+    color:var(--bloom);
     font-weight:800;
     font-size:16px;
-    box-shadow:0 10px 26px rgba(232,84,107,0.5);
+    box-shadow:0 4px 14px rgba(0,0,0,0.25);
     cursor:pointer;
     white-space:nowrap;
+    backdrop-filter:blur(1px);
   }
   .btn-arrived-float:active{transform:translateX(-50%) scale(0.97);}
 
@@ -692,9 +702,6 @@
         <div class="addr-row">
           <div class="addr-slot" id="start-slot"></div>
           <div class="addr-status" id="start-status">✓</div>
-        </div>
-        <div class="locate-row">
-          <button class="btn-inline" id="btn-use-location" type="button">📍 Use my current location</button>
         </div>
       </div>
 
@@ -980,11 +987,34 @@ function renderStartReadonly(address){
   editBtn.type = 'button';
   editBtn.className = 'btn-inline';
   editBtn.textContent = '✎ Change';
-  editBtn.addEventListener('click', enterStartEditMode);
+  editBtn.addEventListener('click', showStartChangeOptions);
   wrap.appendChild(addrEl);
   wrap.appendChild(editBtn);
   slot.appendChild(wrap);
   document.getElementById('start-status').classList.add('ok');
+}
+
+function showStartChangeOptions(){
+  const slot = document.getElementById('start-slot');
+  slot.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'start-change-options';
+
+  const locBtn = document.createElement('button');
+  locBtn.type = 'button';
+  locBtn.className = 'btn-chip';
+  locBtn.textContent = '📍 Current location';
+  locBtn.addEventListener('click', useCurrentLocation);
+
+  const searchBtn = document.createElement('button');
+  searchBtn.type = 'button';
+  searchBtn.className = 'btn-chip';
+  searchBtn.textContent = '🔍 New address';
+  searchBtn.addEventListener('click', enterStartEditMode);
+
+  wrap.appendChild(locBtn);
+  wrap.appendChild(searchBtn);
+  slot.appendChild(wrap);
 }
 
 function enterStartEditMode(){
@@ -1337,8 +1367,6 @@ function wireStaticEvents(){
   });
   refreshSavedRoutesDropdown();
 
-  document.getElementById('btn-use-location').addEventListener('click', useCurrentLocation);
-
   document.querySelectorAll('.route-opt').forEach(opt => {
     opt.addEventListener('click', () => {
       document.querySelectorAll('.route-opt').forEach(o => o.classList.remove('selected'));
@@ -1363,13 +1391,13 @@ function wireStaticEvents(){
   });
 }
 
-function useCurrentLocation(){
+function useCurrentLocation(event){
   if (!navigator.geolocation){
     showToast('Location is not available on this device.');
     return;
   }
-  const btn = document.getElementById('btn-use-location');
-  btn.textContent = '📍 Locating…';
+  const btn = event && event.currentTarget;
+  if (btn) btn.textContent = '📍 Locating…';
   navigator.geolocation.getCurrentPosition(async (pos) => {
     const lat = pos.coords.latitude, lng = pos.coords.longitude;
     try{
@@ -1380,12 +1408,11 @@ function useCurrentLocation(){
       validateSetup();
     }catch(e){
       showToast("Couldn't determine your address from GPS. Please type it in instead.");
-    } finally {
-      btn.textContent = '📍 Use my current location';
+      showStartChangeOptions();
     }
   }, () => {
     showToast('Location permission was denied.');
-    btn.textContent = '📍 Use my current location';
+    showStartChangeOptions();
   }, { enableHighAccuracy: true, timeout: 10000 });
 }
 
