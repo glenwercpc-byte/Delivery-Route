@@ -1,4 +1,4 @@
-const CACHE_NAME = 'blossom-route-v16';
+const CACHE_NAME = 'blossom-route-v17';
 const APP_SHELL = [
   './index.html',
   './manifest.json',
