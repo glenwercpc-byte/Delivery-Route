@@ -1024,6 +1024,7 @@ function enterStartEditMode(){
   slot.innerHTML = '';
   const el = makeAutocompleteEl('Enter shop / starting address');
   slot.appendChild(el);
+  setTimeout(() => { try{ el.focus(); }catch(e){ /* ignore */ } }, 0);
   el.addEventListener('gmp-select', async ({ placePrediction }) => {
     try{
       const place = placePrediction.toPlace();
@@ -1101,6 +1102,7 @@ function addStopRow(prefill){
 
   const el = makeAutocompleteEl(`Delivery address #${stopFields.size}`);
   slot.appendChild(el);
+  setTimeout(() => { try{ el.focus(); }catch(e){ /* ignore */ } }, 0);
 
   el.addEventListener('gmp-select', async ({ placePrediction }) => {
     try{
