@@ -1642,45 +1642,7 @@ async function updateActiveMap(position, label){
   });
 }
 
-/* ---------------- Arrival reminder (notification + vibration) ---------------- */
-let reminderTimer = null;
-
-function requestNotificationPermission(){
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'default'){
-    try{ Notification.requestPermission(); }catch(e){ /* ignore */ }
-  }
-}
-
-function scheduleArrivalReminder(driveSeconds){
-  clearArrivalReminder();
-  // Best-effort: fires after the estimated drive time for this leg elapses.
-  // Note this is an estimate, not real GPS arrival detection, and mobile
-  // browsers may throttle timers if the tab stays backgrounded a long time.
-  reminderTimer = setTimeout(fireArrivalReminder, Math.max(driveSeconds, 5) * 1000);
-}
-
-function clearArrivalReminder(){
-  if (reminderTimer){ clearTimeout(reminderTimer); reminderTimer = null; }
-}
-
-function fireArrivalReminder(){
-  if (navigator.vibrate){
-    try{ navigator.vibrate([300, 150, 300, 150, 300]); }catch(e){ /* ignore */ }
-  }
-  if ('Notification' in window && Notification.permission === 'granted'){
-    try{
-      new Notification('Blossom Route', {
-        body: "You should be arriving now — return to Blossom Route and tap Arrived.",
-        icon: 'icons/icon-192.png',
-      });
-    }catch(e){ /* ignore */ }
-  }
-  showToast('📍 You should be arriving — return to Blossom Route to confirm.');
-}
-
 function startDeliveries(){
-  requestNotificationPermission();
   state.tripStartedAt = Date.now();
   state.currentIndex = 0;
   state.arrivals = [];
@@ -1812,15 +1774,11 @@ function navigateToCurrentStop(){
     origin = state.order[i - 1];      // previous delivery -> this delivery
   }
 
-  const legDuration = isReturnStage ? state.legs[n].duration : state.legs[i].duration;
-  scheduleArrivalReminder(legDuration);
-
   const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving&dir_action=navigate`;
   window.open(url, '_blank');
 }
 
 function onArrived(){
-  clearArrivalReminder();
   const n = state.order.length;
   const i = state.currentIndex;
   const isReturnStage = state.routeType === 'roundtrip' && i === n;
@@ -1927,7 +1885,6 @@ function finishTrip(){
 
 function resetApp(){
   stopVoiceInput();
-  clearArrivalReminder();
   // clear stop rows
   clearStopsContainer();
   initDefaultStart();
