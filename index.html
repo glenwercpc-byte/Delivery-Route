@@ -547,6 +547,19 @@
     cursor:pointer;
     white-space:nowrap;
     backdrop-filter:blur(1px);
+    animation:arrivedBlink 1.1s ease-in-out infinite;
+  }
+  @keyframes arrivedBlink{
+    0%,100%{
+      opacity:1;
+      border-color:var(--bloom);
+      color:var(--bloom);
+    }
+    50%{
+      opacity:0.35;
+      border-color:#fff;
+      color:#fff;
+    }
   }
   .btn-arrived-float:active{transform:translateX(-50%) scale(0.97);}
 
