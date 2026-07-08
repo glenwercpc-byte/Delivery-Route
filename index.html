@@ -1748,9 +1748,9 @@ function startDeliveries(){
   state.arrivals = [];
   state.returnArrivalAt = null;
   state.awaitingNextConfirm = false;
+  navigateToCurrentStop();
   renderActive();
   showScreen('screen-active');
-  navigateToCurrentStop();
 }
 
 function renderActive(){
@@ -1865,16 +1865,18 @@ function navigateToCurrentStop(){
   const isReturnStage = state.routeType === 'roundtrip' && i === n;
 
   const dest = isReturnStage ? state.start : state.order[i];
-  let origin;
-  if (isReturnStage){
-    origin = state.order[n - 1];      // last delivery -> back to shop
-  } else if (i === 0){
-    origin = state.start;             // shop -> first delivery
-  } else {
-    origin = state.order[i - 1];      // previous delivery -> this delivery
-  }
 
-  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving&dir_action=navigate`;
+  // Only the very first leg fixes an explicit origin (the shop address) —
+  // the driver should be there when starting deliveries. Every leg after
+  // that omits origin so Google Maps uses the device's live location,
+  // which is required for dir_action=navigate to skip the preview screen
+  // and start turn-by-turn immediately.
+  const isFirstLeg = !isReturnStage && i === 0;
+
+  let url = `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving&dir_action=navigate`;
+  if (isFirstLeg){
+    url += `&origin=${state.start.lat},${state.start.lng}`;
+  }
   window.open(url, '_blank');
 }
 
@@ -1901,8 +1903,11 @@ function advanceStop(){
   if (state.currentIndex >= totalStages){
     finishTrip();
   } else {
+    // Call navigation first, as close to the user's tap as possible —
+    // some mobile browsers block window.open() as a popup if too much
+    // other work (re-rendering the map, list, etc.) runs before it.
+    navigateToCurrentStop();
     renderActive();
-    navigateToCurrentStop(); // hand straight off to nav for the next leg
   }
 }
 
