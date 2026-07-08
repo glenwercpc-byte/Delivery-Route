@@ -950,7 +950,29 @@ async function initApp(){
 function makeAutocompleteEl(placeholder){
   const el = document.createElement('gmp-place-autocomplete');
   el.setAttribute('placeholder', placeholder);
+  applyLocationBias(el);
   return el;
+}
+
+/* Bias autocomplete predictions toward the user's current location so
+   nearby addresses are suggested first. Falls back silently (Google's
+   default IP-based bias) if location isn't available or permitted. */
+let cachedGeoPosition = null;
+
+function applyLocationBias(el){
+  if (cachedGeoPosition){
+    el.locationBias = cachedGeoPosition;
+    return;
+  }
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      cachedGeoPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      el.locationBias = cachedGeoPosition;
+    },
+    () => { /* denied/unavailable — Google falls back to IP-based bias */ },
+    { maximumAge: 5 * 60 * 1000, timeout: 8000 }
+  );
 }
 
 /* Start address defaults to the shop address, shown read-only with a
